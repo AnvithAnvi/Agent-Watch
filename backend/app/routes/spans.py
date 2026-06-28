@@ -1,0 +1,49 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app import models, schemas
+from app.deps import get_current_project
+
+router = APIRouter(
+    prefix="/runs",
+    tags=["Spans"]
+)
+
+
+@router.post("/{run_id}/spans", response_model=schemas.SpanResponse)
+def create_span(
+    run_id: int,
+    span: schemas.SpanCreate,
+    db: Session = Depends(get_db),
+    project: models.Project = Depends(get_current_project)
+):
+    run = db.query(models.Run).filter(
+        models.Run.id == run_id,
+        models.Run.project_id == project.id
+    ).first()
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    new_span = models.Span(
+        run_id=run_id,
+        span_type=span.span_type,
+        name=span.name,
+        input_json=span.input_json,
+        output_json=span.output_json,
+        status=span.status,
+        latency_ms=span.latency_ms,
+        error_message=span.error_message,
+        parent_span_id=span.parent_span_id,
+        trace_id=span.trace_id,
+        host=span.host,
+        pid=span.pid,
+        meta_json=span.meta_json
+    )
+
+    db.add(new_span)
+    db.commit()
+    db.refresh(new_span)
+
+    return new_span
